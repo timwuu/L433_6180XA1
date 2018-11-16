@@ -51,8 +51,6 @@
 /* USER CODE END Includes */
 
 /* Private variables ---------------------------------------------------------*/
-ADC_HandleTypeDef hadc1;
-
 I2C_HandleTypeDef hi2c1;
 
 TIM_HandleTypeDef htim6;
@@ -69,7 +67,6 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART2_UART_Init(void);
 static void MX_I2C1_Init(void);
-static void MX_ADC1_Init(void);
 static void MX_TIM6_Init(void);
 
 /* USER CODE BEGIN PFP */
@@ -221,7 +218,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin){
 #define BSP_BP_PIN  GPIO_PIN_13
 int BSP_GetPushButton(void){
     GPIO_PinState state ;
-    state = HAL_GPIO_ReadPin(BSP_BP_PORT, BSP_BP_PIN);
+    //timijk 2018.11.17 different to NUCLEO-64
+    state = !HAL_GPIO_ReadPin(BSP_BP_PORT, BSP_BP_PIN);
     return state;
 }
 
@@ -395,7 +393,7 @@ void DoScalingSwap(int scaling){
  *
  * @return True if button remain pressed more than specified time
  */
-int PusbButton_WaitUnPress(void){
+int PushButton_WaitUnPress(void){
     TimeStarted = g_TickCnt;
     while( !BSP_GetPushButton() ){ ; /* debounce */
         DISP_ExecLoopBody();
@@ -623,7 +621,7 @@ void AlarmState(void){
 
     if( !BSP_GetPushButton() ){
         /* when button get presses wait it get release (keep doing display) */
-        status = PusbButton_WaitUnPress();
+        status = PushButton_WaitUnPress();
         if( status ){
             /* BP stay pressed very long time switch back to range/als  */
             AlarmStop();
@@ -729,7 +727,7 @@ void RangeState(void) {
 #define max_scale 3
     if (!BSP_GetPushButton()) {
         TimeStarted = g_TickCnt;
-        status = PusbButton_WaitUnPress();
+        status = PushButton_WaitUnPress();
         if (status) {
             GoToAlaramState();
             return;
@@ -802,18 +800,19 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
+  XNUCLEO6180XA1_I2CFailRecover();  //timijk 2018.11.16
+
   /* USER CODE END SysInit */
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_I2C1_Init();
-  MX_ADC1_Init();
   MX_TIM6_Init();
   /* USER CODE BEGIN 2 */
   /* these almost just redo what already done just above by CubeMx Init
    * but it get tested and can be re place cube-mx init code :) */
-    XNUCLEO6180XA1_GPIO_Init();
+    //timijk 2018.11.16 XNUCLEO6180XA1_GPIO_Init();
     XNUCLEO6180XA1_I2C1_Init(&hi2c1);
 
     /* SysTick end of count event each 1ms */
@@ -964,18 +963,9 @@ void SystemClock_Config(void)
     _Error_Handler(__FILE__, __LINE__);
   }
 
-  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1
-                              |RCC_PERIPHCLK_ADC;
+  PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_USART2|RCC_PERIPHCLK_I2C1;
   PeriphClkInit.Usart2ClockSelection = RCC_USART2CLKSOURCE_PCLK1;
   PeriphClkInit.I2c1ClockSelection = RCC_I2C1CLKSOURCE_PCLK1;
-  PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_PLLSAI1;
-  PeriphClkInit.PLLSAI1.PLLSAI1Source = RCC_PLLSOURCE_HSI;
-  PeriphClkInit.PLLSAI1.PLLSAI1M = 1;
-  PeriphClkInit.PLLSAI1.PLLSAI1N = 8;
-  PeriphClkInit.PLLSAI1.PLLSAI1P = RCC_PLLP_DIV7;
-  PeriphClkInit.PLLSAI1.PLLSAI1Q = RCC_PLLQ_DIV2;
-  PeriphClkInit.PLLSAI1.PLLSAI1R = RCC_PLLR_DIV2;
-  PeriphClkInit.PLLSAI1.PLLSAI1ClockOut = RCC_PLLSAI1_ADC1CLK;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
     _Error_Handler(__FILE__, __LINE__);
@@ -998,49 +988,6 @@ void SystemClock_Config(void)
 
   /* SysTick_IRQn interrupt configuration */
   HAL_NVIC_SetPriority(SysTick_IRQn, 0, 0);
-}
-
-/* ADC1 init function */
-static void MX_ADC1_Init(void)
-{
-
-  ADC_ChannelConfTypeDef sConfig;
-
-    /**Common config 
-    */
-  hadc1.Instance = ADC1;
-  hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
-  hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
-  hadc1.Init.LowPowerAutoWait = DISABLE;
-  hadc1.Init.ContinuousConvMode = DISABLE;
-  hadc1.Init.NbrOfConversion = 1;
-  hadc1.Init.DiscontinuousConvMode = DISABLE;
-  hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
-  hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
-  hadc1.Init.DMAContinuousRequests = DISABLE;
-  hadc1.Init.Overrun = ADC_OVR_DATA_PRESERVED;
-  hadc1.Init.OversamplingMode = DISABLE;
-  if (HAL_ADC_Init(&hadc1) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
-    /**Configure Regular Channel 
-    */
-  sConfig.Channel = ADC_CHANNEL_5;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
-  sConfig.SingleDiff = ADC_SINGLE_ENDED;
-  sConfig.OffsetNumber = ADC_OFFSET_NONE;
-  sConfig.Offset = 0;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    _Error_Handler(__FILE__, __LINE__);
-  }
-
 }
 
 /* I2C1 init function */
@@ -1149,7 +1096,7 @@ static void MX_GPIO_Init(void)
 
   /*Configure GPIO pin : B1_Pin */
   GPIO_InitStruct.Pin = B1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+  GPIO_InitStruct.Mode = GPIO_MODE_EVT_RISING;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(B1_GPIO_Port, &GPIO_InitStruct);
 
